@@ -446,14 +446,36 @@ function MapComponent() {
             }
 
             // sau 5s ve vi tri ban dau
+
             setTimeout(function () {
+              if (!travelers.current[selectedTraveler]) {
+                console.error(
+                  "Traveler with id " + selectedTraveler + " does not exist"
+                );
+                return;
+              }
+
               // immediately set traveler's location back to origin without visual transition;
               travelers.current[selectedTraveler].currentLocation = origin; // Set current location to origin
               travelers.current[selectedTraveler].feature.setGeometry(
                 new Point(fromLonLat(origin))
               ); // Update feature's geometry to origin
               travelers.current[selectedTraveler].atOrigin = true; // traveler is at origin again
-            }, 50000); // Delay of 10 seconds
+
+              // remove the reached point from destinationsReached array
+              destinationsReached.current = destinationsReached.current.filter(
+                (reachedDestination) =>
+                  reachedDestination.id !== selectedTraveler ||
+                  !arePointsEqual(
+                    reachedDestination.coordinate,
+                    selectedFeature
+                  )
+              );
+              // where arePointsEqual is a helper function that checks if two points are equal
+              function arePointsEqual(point1, point2) {
+                return point1[0] === point2[0] && point1[1] === point2[1];
+              }
+            }, selectedTraveler * 1000); // delay based on the destination point index, multiplied by 1000 to convert to milliseconds
           }
         };
 
