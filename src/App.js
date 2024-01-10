@@ -24,6 +24,7 @@ import Text from "ol/style/Text";
 import lau_dai from "./images/lau_dai.webp";
 import quai_vat from "./images/quai_vat.jpg";
 import quan_doi from "./images/quan_doi.jpg";
+import gif from "./images/giphy.gif";
 
 const TRAVELER_AMOUNT = 5;
 
@@ -59,6 +60,12 @@ const endPointStyle = new Style({
     width: 46.7,
     height: 29.6,
   }),
+});
+
+const arrowIcon = new Icon({
+  src: gif,
+  width: 30,
+  height: 30,
 });
 
 const getRandomPoint = (center, radius) => {
@@ -132,7 +139,7 @@ function MapComponent() {
             // Thêm dòng này để thêm số thứ tự vào style của Feature
             text: String(index + 1),
             scale: 1.2,
-            offsetY: -25, // Dịch chuyển tọa độ y của số thứ tự so với ảnh, bạn có thể chỉnh đến khi nó phù hợp
+            offsetY: -25, // Dịch chuyển tọa độ y của số thứ tự so với ảnh, bạn có thể chỉnh đến khi nó phù hợp,
           }),
         })
       );
@@ -489,7 +496,7 @@ function MapComponent() {
               function arePointsEqual(point1, point2) {
                 return point1[0] === point2[0] && point1[1] === point2[1];
               }
-            }, selectedTraveler * 1000); // delay based on the destination point index, multiplied by 1000 to convert to milliseconds
+            }, selectedTraveler * 2000); // delay based on the destination point index, multiplied by 1000 to convert to milliseconds
           }
         };
 
