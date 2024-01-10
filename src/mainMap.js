@@ -119,9 +119,23 @@ function MapComponent() {
     );
 
     // Tạo ra các features cho các điểm ngẫu nhiên
-    const features = randomPoints.map((coord) => {
+    const features = randomPoints.map((coord, index) => {
       const feature = new Feature(new Point(fromLonLat(coord)));
-      feature.setStyle(endPointStyle);
+      feature.setStyle(
+        new Style({
+          image: new Icon({
+            src: quai_vat,
+            width: 46.7,
+            height: 29.6,
+          }),
+          text: new Text({
+            // Thêm dòng này để thêm số thứ tự vào style của Feature
+            text: String(index + 1),
+            scale: 1.2,
+            offsetY: -25, // Dịch chuyển tọa độ y của số thứ tự so với ảnh, bạn có thể chỉnh đến khi nó phù hợp
+          }),
+        })
+      );
       feature.setProperties({ isClickable: true, coord });
       return feature;
     });
@@ -444,6 +458,38 @@ function MapComponent() {
               map.current.removeLayer(currentPathLayer.value);
               currentPathLayer.value = null;
             }
+
+            // sau 5s ve vi tri ban dau
+
+            setTimeout(function () {
+              if (!travelers.current[selectedTraveler]) {
+                console.error(
+                  "Traveler with id " + selectedTraveler + " does not exist"
+                );
+                return;
+              }
+
+              // immediately set traveler's location back to origin without visual transition;
+              travelers.current[selectedTraveler].currentLocation = origin; // Set current location to origin
+              travelers.current[selectedTraveler].feature.setGeometry(
+                new Point(fromLonLat(origin))
+              ); // Update feature's geometry to origin
+              travelers.current[selectedTraveler].atOrigin = true; // traveler is at origin again
+
+              // remove the reached point from destinationsReached array
+              destinationsReached.current = destinationsReached.current.filter(
+                (reachedDestination) =>
+                  reachedDestination.id !== selectedTraveler ||
+                  !arePointsEqual(
+                    reachedDestination.coordinate,
+                    selectedFeature
+                  )
+              );
+              // where arePointsEqual is a helper function that checks if two points are equal
+              function arePointsEqual(point1, point2) {
+                return point1[0] === point2[0] && point1[1] === point2[1];
+              }
+            }, selectedTraveler * 1000); // delay based on the destination point index, multiplied by 1000 to convert to milliseconds
           }
         };
 

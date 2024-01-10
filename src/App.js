@@ -119,9 +119,23 @@ function MapComponent() {
     );
 
     // Tạo ra các features cho các điểm ngẫu nhiên
-    const features = randomPoints.map((coord) => {
+    const features = randomPoints.map((coord, index) => {
       const feature = new Feature(new Point(fromLonLat(coord)));
-      feature.setStyle(endPointStyle);
+      feature.setStyle(
+        new Style({
+          image: new Icon({
+            src: quai_vat,
+            width: 46.7,
+            height: 29.6,
+          }),
+          text: new Text({
+            // Thêm dòng này để thêm số thứ tự vào style của Feature
+            text: String(index + 1),
+            scale: 1.2,
+            offsetY: -25, // Dịch chuyển tọa độ y của số thứ tự so với ảnh, bạn có thể chỉnh đến khi nó phù hợp
+          }),
+        })
+      );
       feature.setProperties({ isClickable: true, coord });
       return feature;
     });
