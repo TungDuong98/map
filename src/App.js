@@ -24,7 +24,7 @@ import Text from "ol/style/Text";
 import lau_dai from "./images/lau_dai.webp";
 import quai_vat from "./images/quai_vat.jpg";
 import quan_doi from "./images/quan_doi.jpg";
-import gif from "./images/giphy.gif";
+import arrow from "./images/giphy.gif";
 
 const TRAVELER_AMOUNT = 5;
 
@@ -62,12 +62,6 @@ const endPointStyle = new Style({
   }),
 });
 
-const arrowIcon = new Icon({
-  src: gif,
-  width: 30,
-  height: 30,
-});
-
 const getRandomPoint = (center, radius) => {
   var y0 = center[1];
   var x0 = center[0];
@@ -86,6 +80,40 @@ const getRandomPoint = (center, radius) => {
 
   return [xp + x0, y + y0];
 };
+
+// Tạo ra các điểm ngẫu nhiên
+const randomPoints = Array.from({ length: 10 }, () =>
+  getRandomPoint(origin, 2000)
+);
+
+// Tạo ra các features cho các điểm ngẫu nhiên
+const features = randomPoints.map((coord, index) => {
+  const feature = new Feature(new Point(fromLonLat(coord)));
+  feature.setStyle(
+    new Style({
+      image: new Icon({
+        src: quai_vat,
+        width: 46.7,
+        height: 29.6,
+      }),
+      text: new Text({
+        // Thêm dòng này để thêm số thứ tự vào style của Feature
+        text: String(index + 1),
+        scale: 1.2,
+        offsetY: -25, // Dịch chuyển tọa độ y của số thứ tự so với ảnh, bạn có thể chỉnh đến khi nó phù hợp,
+      }),
+    })
+  );
+  feature.setProperties({ isClickable: true, coord });
+  return feature;
+});
+
+// Tạo layer cho các điểm ngẫu nhiên
+const randomPointLayer = new VectorLayer({
+  source: new VectorSource({
+    features: features,
+  }),
+});
 
 function MapComponent() {
   const [showModal, setShowModal] = useState(false);
@@ -120,40 +148,6 @@ function MapComponent() {
   const mapRef = useRef();
 
   useEffect(() => {
-    // Tạo ra các điểm ngẫu nhiên
-    const randomPoints = Array.from({ length: 10 }, () =>
-      getRandomPoint(origin, 2000)
-    );
-
-    // Tạo ra các features cho các điểm ngẫu nhiên
-    const features = randomPoints.map((coord, index) => {
-      const feature = new Feature(new Point(fromLonLat(coord)));
-      feature.setStyle(
-        new Style({
-          image: new Icon({
-            src: quai_vat,
-            width: 46.7,
-            height: 29.6,
-          }),
-          text: new Text({
-            // Thêm dòng này để thêm số thứ tự vào style của Feature
-            text: String(index + 1),
-            scale: 1.2,
-            offsetY: -25, // Dịch chuyển tọa độ y của số thứ tự so với ảnh, bạn có thể chỉnh đến khi nó phù hợp,
-          }),
-        })
-      );
-      feature.setProperties({ isClickable: true, coord });
-      return feature;
-    });
-
-    // Tạo layer cho các điểm ngẫu nhiên
-    const randomPointLayer = new VectorLayer({
-      source: new VectorSource({
-        features: features,
-      }),
-    });
-
     // Nếu Map chưa được khởi tạo, thì ta sẽ tạo mới.
     if (!map.current) {
       map.current = new Map({
@@ -407,13 +401,22 @@ function MapComponent() {
         map.current.addLayer(currentPathLayer.value);
 
         const line = turf.lineString(path);
-        const travelTime = 0.002 * 60 * 60;
+        const travelTime = 0.0001 * 60 * 60;
 
         const moveTraveler = () => {
           const elapsedTime = Date.now() / 1000 - startTime;
           const progress = elapsedTime / travelTime;
           const distance = turf.length(line) * progress;
           const currentLocation = turf.along(line, distance);
+
+          if (
+            !currentLocation ||
+            !currentLocation.geometry ||
+            !currentLocation.geometry.coordinates
+          ) {
+            console.error("Current location coordinates not available");
+            return;
+          }
 
           // update vị trí hiện tại của traveler đang di chuyển
           if (
@@ -451,7 +454,6 @@ function MapComponent() {
               destinationsReached.current.push(
                 destinationsInMovement.current[destinationIndex]
               );
-
               destinationsInMovement.current.splice(destinationIndex, 1);
 
               // Update the moving property of the feature when the traveler has reached the destination:
@@ -493,10 +495,44 @@ function MapComponent() {
                   )
               );
               // where arePointsEqual is a helper function that checks if two points are equal
+              // where arePointsEqual is a helper function that checks if two points are equal
               function arePointsEqual(point1, point2) {
-                return point1[0] === point2[0] && point1[1] === point2[1];
+                if (point1 && point2) {
+                  return point1[0] === point2[0] && point1[1] === point2[1];
+                }
+                return false;
               }
             }, selectedTraveler * 2000); // delay based on the destination point index, multiplied by 1000 to convert to milliseconds
+
+            // THÊM ĐOẠN MÃ TẠI ĐÂY
+            // Tìm `destinationFeature` từ `randomPointLayer`
+            let featureAtDestination = null;
+            randomPointLayer.getSource().forEachFeature((feature) => {
+              const featureLoc = toLonLat(
+                feature.getGeometry().getCoordinates()
+              );
+              if (
+                featureLoc[0].toFixed(6) === selectedFeature[0].toFixed(6) &&
+                featureLoc[1].toFixed(6) === selectedFeature[1].toFixed(6)
+              ) {
+                featureAtDestination = feature;
+              }
+            });
+
+            // Cập nhật style cho `destinationFeature`
+            if (featureAtDestination) {
+              const currentStyle = featureAtDestination.getStyle();
+              currentStyle.setImage(
+                new Icon({
+                  src: arrow,
+                  width: 100,
+                  height: 100,
+                  anchor: [0.5, 3],
+                })
+              );
+
+              featureAtDestination.setStyle(currentStyle);
+            }
           }
         };
 
@@ -544,6 +580,7 @@ function MapComponent() {
           padding: "10px",
         }}
       >
+        <img src={arrow} alt="arrow" width={200} />
         <table>
           <thead>
             <tr>
