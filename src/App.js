@@ -66,43 +66,43 @@ const travelersMockData = [
     origin: origin,
     destination: randomPoints[0],
     startTime: new Date().getTime(),
-    endTime: new Date().getTime() + 10000,
-  },
-  {
-    id: 2,
-    origin: origin,
-    destination: randomPoints[2],
-    startTime: new Date().getTime(),
     endTime: new Date().getTime() + 20000,
   },
-  {
-    id: 3,
-    origin: origin,
-    destination: randomPoints[3],
-    startTime: new Date().getTime(),
-    endTime: new Date().getTime() + 30000,
-  },
-  {
-    id: 4,
-    origin: origin,
-    destination: randomPoints[4],
-    startTime: new Date().getTime(),
-    endTime: new Date().getTime() + 40000,
-  },
-  {
-    id: 5,
-    origin: origin,
-    destination: randomPoints[5],
-    startTime: new Date().getTime(),
-    endTime: new Date().getTime() + 50000,
-  },
-  {
-    id: 6,
-    origin: origin,
-    destination: randomPoints[6],
-    startTime: new Date().getTime(),
-    endTime: new Date().getTime() + 60000,
-  },
+  // {
+  //   id: 2,
+  //   origin: origin,
+  //   destination: randomPoints[2],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 20000,
+  // },
+  // {
+  //   id: 3,
+  //   origin: origin,
+  //   destination: randomPoints[3],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 30000,
+  // },
+  // {
+  //   id: 4,
+  //   origin: origin,
+  //   destination: randomPoints[4],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 40000,
+  // },
+  // {
+  //   id: 5,
+  //   origin: origin,
+  //   destination: randomPoints[5],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 50000,
+  // },
+  // {
+  //   id: 6,
+  //   origin: origin,
+  //   destination: randomPoints[6],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 60000,
+  // },
 ];
 
 // Tạo ra các điểm ngẫu nhiên
@@ -193,6 +193,28 @@ function MapComponent() {
 
   const travelerSource = new VectorSource();
 
+  // test chuc nang quay lai
+
+  // useEffect(() => {
+  //   const timeoutId = setTimeout(() => {
+  //     const newTravelersData = travelersData.map((travelerData, idx) => {
+  //       const currentLocation = toLonLat(
+  //         travelers.current[idx].feature.getGeometry().getCoordinates()
+  //       );
+  //       return {
+  //         ...travelerData,
+  //         origin: currentLocation, // update origin to be the current location of the traveler
+  //         destination: origin,
+  //         startTime: new Date().getTime(),
+  //         endTime: new Date().getTime() + 10000,
+  //       };
+  //     });
+  //     setTravelersData(newTravelersData);
+  //   }, 10000);
+
+  //   return () => clearTimeout(timeoutId);
+  // }, [travelersData]); // adding travelersData as a dependency, so every 10 seconds, the positions will be updated and re-render the useEffect
+
   useEffect(() => {
     // Tạo feature cho điểm xuất phát
 
@@ -238,7 +260,7 @@ function MapComponent() {
       source: travelerSource, // sử dụng source vừa tạo
     });
 
-    travelersMockData.forEach((traveler, idx) => {
+    travelersData.forEach((traveler, idx) => {
       // Tạo marker
       let origin = fromLonLat([traveler.origin[0], traveler.origin[1]]);
       let travelerFeature = new Feature({
@@ -320,7 +342,7 @@ function MapComponent() {
         map.current = null;
       }
     };
-  }, [isMoving, travelers]);
+  }, [isMoving, travelersData, travelers]);
 
   function TravelerStatus({ travelerId, status, currentLocation }) {
     return (
