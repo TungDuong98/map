@@ -26,6 +26,7 @@ import lau_dai from "./images/lau_dai.webp";
 import quai_vat from "./images/quai_vat.jpg";
 import quan_doi from "./images/quan_doi.jpg";
 import arrow from "./images/giphy.gif";
+import Stroke from "ol/style/Stroke";
 
 const TRAVELER_AMOUNT = 5;
 
@@ -62,42 +63,42 @@ const randomPoints = [
 
 const travelersMockData = [
   {
-    id: 1,
+    id: 0,
     origin: origin,
     destination: randomPoints[0],
     startTime: new Date().getTime(),
     endTime: new Date().getTime() + 20000,
   },
   // {
-  //   id: 2,
+  //   id: 1,
   //   origin: origin,
   //   destination: randomPoints[2],
   //   startTime: new Date().getTime(),
   //   endTime: new Date().getTime() + 20000,
   // },
   // {
-  //   id: 3,
+  //   id: 2,
   //   origin: origin,
   //   destination: randomPoints[3],
   //   startTime: new Date().getTime(),
   //   endTime: new Date().getTime() + 30000,
   // },
   // {
-  //   id: 4,
+  //   id: 3,
   //   origin: origin,
   //   destination: randomPoints[4],
   //   startTime: new Date().getTime(),
   //   endTime: new Date().getTime() + 40000,
   // },
   // {
-  //   id: 5,
+  //   id: 4,
   //   origin: origin,
   //   destination: randomPoints[5],
   //   startTime: new Date().getTime(),
   //   endTime: new Date().getTime() + 50000,
   // },
   // {
-  //   id: 6,
+  //   id: 5,
   //   origin: origin,
   //   destination: randomPoints[6],
   //   startTime: new Date().getTime(),
@@ -137,16 +138,22 @@ const randomPointLayer = new VectorLayer({
 });
 
 async function getRoute(origin, destination) {
-  let response = await axios.get(
-    "https://api.openrouteservice.org/v2/directions/driving-car",
-    {
-      params: {
-        api_key: api_key,
-        start: origin.join(","),
-        end: destination.join(","),
-      },
-    }
-  );
+  let response;
+  try {
+    response = await axios.get(
+      "https://api.openrouteservice.org/v2/directions/driving-car",
+      {
+        params: {
+          api_key: api_key,
+          start: origin.join(","),
+          end: destination.join(","),
+        },
+      }
+    );
+  } catch (error) {
+    console.error("Error fetching route:", error);
+    return null; // Thêm điều kiện trả về `null` khi gặp lỗi
+  }
 
   return response.data.features[0].geometry.coordinates;
 }
@@ -159,8 +166,15 @@ const calculateDistance = (origin, destination) => {
   return turf.distance(from, to, options);
 };
 
+const pathSource = new VectorSource();
+
 function MapComponent() {
+  const routeFeatures = useRef([]); // Chứa tất cả các routeFeatures của cả ứng dụng
+
   const travelersMarkers = useRef({});
+  const isTraveling = useRef(
+    Array.from({ length: TRAVELER_AMOUNT }, () => true)
+  );
   const [travelersData, setTravelersData] = useState(travelersMockData);
   const [showTravelerModal, setShowTravelerModal] = useState(false);
   const [currentTraveler, setCurrentTraveler] = useState(null);
@@ -184,10 +198,17 @@ function MapComponent() {
   const map = useRef(null);
 
   // tao ra 1 tham chieu layer de ve duong di
-  // Khởi tạo currentPathLayer
-  let currentPathLayer = {
-    value: null,
-  };
+  const pathLayer = useRef(
+    new VectorLayer({
+      source: pathSource,
+      style: new Style({
+        stroke: new Stroke({
+          color: "red",
+          width: 2,
+        }),
+      }),
+    })
+  );
 
   const mapRef = useRef();
 
@@ -231,6 +252,8 @@ function MapComponent() {
 
     // Nếu Map chưa được khởi tạo, thì ta sẽ tạo mới.
 
+    // Tạo ra mọt VectorLayer để vẽ các đường dẫn
+
     if (!map.current) {
       map.current = new Map({
         target: mapRef.current,
@@ -240,8 +263,9 @@ function MapComponent() {
               url: `${mapStyle}/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`,
             }),
           }),
-          originLayer, // thêm originLayer vào layers render trên bản đồ
+          originLayer,
           randomPointLayer,
+          // pathLayer.current, // Loại bỏ từ đây
         ],
         view: new View({
           center: fromLonLat(origin),
@@ -252,6 +276,9 @@ function MapComponent() {
           constrainRotation: true,
         }),
       });
+
+      // Thêm vào sau khi Map được khởi tạo
+      map.current.addLayer(pathLayer.current);
     }
 
     // Tạo layer cho điểm xuất phát
@@ -296,6 +323,10 @@ function MapComponent() {
 
       const moveTraveler = async () => {
         const route = await getRoute(traveler.origin, traveler.destination);
+        if (!route) {
+          console.error("Could not fetch route");
+          return;
+        }
 
         const totalTimeInSeconds =
           (traveler.endTime - traveler.startTime) / 1000;
@@ -305,12 +336,29 @@ function MapComponent() {
           units: "kilometers",
         });
 
+        // Tạo ra một LineString từ route
+        const routeGeom = new LineString(
+          route.map((coord) => fromLonLat(coord))
+        );
+
+        // Tạo ra một Feature từ LineString
+        const routeFeature = new Feature(routeGeom);
+
+        // Lưu trữ routeFeature để có thể xóa nó sau này
+        routeFeatures.current[traveler.id] = routeFeature;
+
+        // Thêm Feature vào pathSource
+        pathSource.addFeature(routeFeature);
+
         let timerInterval = 16.7; // ~60 frames per second
         let totalTime = totalTimeInSeconds * 1000; // convert totalTime from seconds to milliseconds
         let totalFrame = totalTime / timerInterval;
         let travelDistanceEachFrame = totalLength / totalFrame;
         let currentProgress = 0;
 
+        console.log("After adding:", pathSource.getFeatures().length);
+
+        // Bắt đầu hàm animate
         const animate = () => {
           if (currentProgress <= totalLength) {
             let newCoord = turf.along(routeLineString, currentProgress, {
@@ -321,8 +369,18 @@ function MapComponent() {
             currentProgress += travelDistanceEachFrame;
 
             requestAnimationFrame(animate);
-          } else {
-            console.log(`Traveler${idx} has ended their journey.`);
+          } else if (isTraveling.current[traveler.id]) {
+            // Removing the feature
+            console.log(
+              "Removing feature: ",
+              routeFeatures.current[traveler.id]
+            );
+            pathSource.removeFeature(routeFeatures.current[traveler.id]);
+            // Update the pathLayer
+            pathLayer.current.changed();
+
+            // Set isTraveling to false when removing the path
+            isTraveling.current[traveler.id] = false;
           }
         };
 
