@@ -33,14 +33,6 @@ const api_key = "5b3ce3597851110001cf6248f2271b43c5d9489b88ff35df22f86d9f";
 const api_google_key = "AIzaSyAkssZqD3mMFIaE8fiYNKHqWH949B9gxlc";
 let origin = [105.8389327, 21.0040616];
 
-// const degree_distance = 0.2; // so cang to thi zoom cang nhieu
-// const topLeft = [origin[0] - degree_distance, origin[1] + degree_distance];
-// const bottomRight = [origin[0] + degree_distance, origin[1] - degree_distance];
-
-// const topLeftLonLat = fromLonLat([topLeft[0], topLeft[1]]);
-// const bottomRightLonLat = fromLonLat([bottomRight[0], bottomRight[1]]);
-// const extent = Extent.boundingExtent([topLeftLonLat, bottomRightLonLat]);
-
 const mapboxToken =
   "pk.eyJ1IjoiZHVvbmcyMzIxOTk4IiwiYSI6ImNscXowNzVhdDAwODgybnFtYWxhbDJzOHcifQ.HYN07AcSfEZVLeVQc6cz3g";
 
@@ -199,8 +191,11 @@ function MapComponent() {
         });
 
         // Create an HTML reference to attach the gif.
+        // Create an HTML reference to attach the gif.
         const gifRef = document.createElement("div");
         gifRef.innerHTML = `<img src="${arrow}" style="width:50px;height:50px;">`;
+        // Ẩn hình ảnh icon khi khởi tạo
+        gifRef.style.display = "none";
 
         const gifOverlay = new Overlay({
           element: gifRef,
@@ -382,7 +377,12 @@ function MapComponent() {
     // Trong hàm handleConfirm, bạn cần set thuộc tính moving của feature tương ứng thành true với travel đang di chuyển.
     // Điều này giúp trạng thái moving được cập nhật đúng trên traveler mỗi khi họ di chuyển đến một điểm mới.
     // Set the 'moving' property of the feature to true
+
+    // Trước khi gọi hàm requestAnimationFrame(moveTraveler), đặt thuộc tính 'moving' của feature thành true
     travelers.current[selectedTraveler].feature.set("moving", true);
+    // Hiện overlay gif
+    travelers.current[selectedTraveler].overlay.getElement().style.display =
+      "block";
 
     axios
       .get("https://api.openrouteservice.org/v2/directions/driving-car", {
@@ -415,7 +415,7 @@ function MapComponent() {
         map.current.addLayer(currentPathLayer.value);
 
         const line = turf.lineString(path);
-        const travelTime = 0.01 * 60 * 60;
+        const travelTime = 0.001 * 60 * 60;
 
         const moveTraveler = () => {
           const elapsedTime = Date.now() / 1000 - startTime;
@@ -475,8 +475,12 @@ function MapComponent() {
               );
               destinationsInMovement.current.splice(destinationIndex, 1);
 
-              // Update the moving property of the feature when the traveler has reached the destination:
+              // Update the 'moving' property of the feature to false
               travelers.current[selectedTraveler].feature.set("moving", false);
+              // Hide the gifOverlay
+              travelers.current[
+                selectedTraveler
+              ].overlay.getElement().style.display = "none";
             }
 
             isMoving.current[selectedTraveler] = false;
@@ -490,6 +494,13 @@ function MapComponent() {
             // sau 5s ve vi tri ban dau
 
             setTimeout(function () {
+              // Inside the setTimeout function, before console.error
+              // Clean up moving state and hide the overlay when traveler returns to origin
+              travelers.current[selectedTraveler].feature.set("moving", false);
+              travelers.current[
+                selectedTraveler
+              ].overlay.getElement().style.display = "none";
+
               if (!travelers.current[selectedTraveler]) {
                 console.error(
                   "Traveler with id " + selectedTraveler + " does not exist"
