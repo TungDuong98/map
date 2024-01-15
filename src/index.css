@@ -24,3 +24,13 @@ code {
 .ol-unselectable.ol-control.ol-hidden {
   display: none;
 }
+
+.traveler-overlay {
+  z-index: 10000;
+  width: 150px;
+  height: 150px;
+}
+
+.icon-overlay {
+  margin-bottom: 200px;
+}
