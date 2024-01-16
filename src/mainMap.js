@@ -1,45 +1,36 @@
+/* eslint-disable default-case */
 /* eslint-disable react-hooks/exhaustive-deps */
+
 import * as turf from "@turf/turf";
-import axios from "axios";
 import Feature from "ol/Feature";
 import Map from "ol/Map";
+import Overlay from "ol/Overlay";
 import View from "ol/View";
-import LineString from "ol/geom/LineString";
 import Point from "ol/geom/Point";
 import TileLayer from "ol/layer/Tile";
 import VectorLayer from "ol/layer/Vector";
-import { fromLonLat, toLonLat } from "ol/proj";
+import { fromLonLat } from "ol/proj";
 import VectorSource from "ol/source/Vector";
 import XYZ from "ol/source/XYZ";
 import Icon from "ol/style/Icon";
 import Style from "ol/style/Style";
-import { useEffect, useRef, useState } from "react";
-import Button from "react-bootstrap/Button";
-import Modal from "react-bootstrap/Modal";
-// import OSM from "ol/source/OSM.js";
-// import * as Extent from "ol/extent";
 import Text from "ol/style/Text";
-// import { isLand, useGeoData } from "./hooks/checkLand";
-import Overlay from "ol/Overlay";
+import { useEffect, useRef, useState } from "react";
+import getRoute from "./route.js";
 
-import lau_dai from "./images/lau_dai.webp";
-import quai_vat from "./images/quai_vat.jpg";
-import quan_doi from "./images/quan_doi.jpg";
-import arrow from "./images/giphy.gif";
+import arrow_down from "./images/arrow_down.png";
+import castle_lv1 from "./images/castle_lv1.png";
+import stone_quarry from "./images/stone_quarry.png";
+import traveler_gif from "./images/traveler.gif";
 
-const TRAVELER_AMOUNT = 5;
+import Stroke from "ol/style/Stroke";
+import { addIconToRandomPointHasWork, updateIconSize } from "./helper.js";
+import useClickMap from "./useClickMap.js";
+import useDrawRoute from "./useDrawRoute";
 
 const api_key = "5b3ce3597851110001cf6248f2271b43c5d9489b88ff35df22f86d9f";
 const api_google_key = "AIzaSyAkssZqD3mMFIaE8fiYNKHqWH949B9gxlc";
 let origin = [105.8389327, 21.0040616];
-
-// const degree_distance = 0.2; // so cang to thi zoom cang nhieu
-// const topLeft = [origin[0] - degree_distance, origin[1] + degree_distance];
-// const bottomRight = [origin[0] + degree_distance, origin[1] - degree_distance];
-
-// const topLeftLonLat = fromLonLat([topLeft[0], topLeft[1]]);
-// const bottomRightLonLat = fromLonLat([bottomRight[0], bottomRight[1]]);
-// const extent = Extent.boundingExtent([topLeftLonLat, bottomRightLonLat]);
 
 const mapboxToken =
   "pk.eyJ1IjoiZHVvbmcyMzIxOTk4IiwiYSI6ImNscXowNzVhdDAwODgybnFtYWxhbDJzOHcifQ.HYN07AcSfEZVLeVQc6cz3g";
@@ -47,660 +38,351 @@ const mapboxToken =
 const mapStyle =
   "https://api.mapbox.com/styles/v1/duong2321998/clqz0c9ey00eo01pz2saa0id6";
 
-const startPointStyle = new Style({
+let originPointStyle = new Style({
   image: new Icon({
-    src: lau_dai,
-    width: 46.7,
-    height: 24.5,
+    src: castle_lv1,
+    width: 200,
+    height: 200,
   }),
 });
 
-const endPointStyle = new Style({
-  image: new Icon({
-    src: quai_vat,
-    width: 46.7,
-    height: 29.6,
-  }),
-});
+const randomPoints = [
+  [105.85557097876611, 21.010123023018156],
+  [105.8307598161608, 21.01949067718937],
+  [105.84495192198916, 20.993695564462747],
+  [105.8382869213779, 20.991998094765712],
+  [105.82524662678202, 20.999492560165645],
+  // [105.83717952677631, 21.00601960900288],
+  [105.85009415185186, 20.99624421452242],
+  [105.8245320385892, 21.01824879561772],
+  [105.86524792487954, 21.001461298558112],
+];
 
-const getRandomPoint = (center, radius) => {
-  var y0 = center[1];
-  var x0 = center[0];
+const travelersMockData = [
+  // {
+  //   id: 0,
+  //   origin: origin,
+  //   destination: randomPoints[0],
+  //   startTime: 1705049705 * 1000,
+  //   endTime: 1705052105 * 1000,
+  // },
+  // {
+  //   id: 1,
+  //   origin: origin,
+  //   destination: randomPoints[2],
+  //   startTime: 1705372055 * 1000,
+  //   endTime: 1705372235 * 1000,
+  // },
+  // {
+  //   id: 2,
+  //   origin: origin,
+  //   destination: randomPoints[3],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 7000,
+  // },
+  // {
+  //   id: 3,
+  //   origin: origin,
+  //   destination: randomPoints[4],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 8000,
+  // },
+  // {
+  //   id: 4,
+  //   origin: origin,
+  //   destination: randomPoints[5],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 8000,
+  // },
+  // {
+  //   id: 5,
+  //   origin: origin,
+  //   destination: randomPoints[6],
+  //   startTime: new Date().getTime(),
+  //   endTime: new Date().getTime() + 10000,
+  // },
+];
 
-  var rd = radius / 111300;
+const pathSource = new VectorSource();
 
-  var u = Math.random();
-  var v = Math.random();
+function MapComponent() {
+  const [travelersData, setTravelersData] = useState(travelersMockData);
+  const [currentTime, setCurrentTime] = useState(new Date().getTime());
+  const [showPointModal, setShowPointModal] = useState(false);
 
-  var w = rd * Math.sqrt(u);
-  var t = 2 * Math.PI * v;
-  var x = w * Math.cos(t);
-  var y = w * Math.sin(t);
+  const routeFeatures = useRef([]);
+  const originFeatureRef = useRef(null);
+  const randomFeatureRefs = useRef([]);
+  const travelersMarkers = useRef({});
+  const pointOverlays = useRef({}); // manage overlay of all points in map
 
-  var xp = x / Math.cos(y0);
+  const featuresRandomPoints = randomPoints.map((coord, index) => {
+    const feature = new Feature(new Point(fromLonLat(coord)));
+    feature.setStyle(
+      new Style({
+        image: new Icon({
+          src: stone_quarry,
+          width: 80,
+          height: 80,
+        }),
+        text: new Text({
+          text: String(index + 1),
+          scale: 1.2,
+          offsetY: -25,
+        }),
+      })
+    );
+    feature.setProperties({ isClickable: true, coord });
 
-  return [xp + x0, y + y0];
-};
+    randomFeatureRefs.current.push(feature);
 
-// Tạo ra các điểm ngẫu nhiên
-const randomPoints = Array.from({ length: 10 }, () =>
-  getRandomPoint(origin, 2000)
-);
+    return feature;
+  });
 
-// Tạo ra các features cho các điểm ngẫu nhiên
-const features = randomPoints.map((coord, index) => {
-  const feature = new Feature(new Point(fromLonLat(coord)));
-  feature.setStyle(
-    new Style({
-      image: new Icon({
-        src: quai_vat,
-        width: 46.7,
-        height: 29.6,
-      }),
-      text: new Text({
-        // Thêm dòng này để thêm số thứ tự vào style của Feature
-        text: String(index + 1),
-        scale: 1.2,
-        offsetY: -25, // Dịch chuyển tọa độ y của số thứ tự so với ảnh, bạn có thể chỉnh đến khi nó phù hợp,
+  const randomPointLayer = new VectorLayer({
+    source: new VectorSource({
+      features: featuresRandomPoints,
+    }),
+  });
+
+  const travelers = useRef(
+    Array.from({ length: travelersMockData.length }, () => ({
+      feature: null,
+      destination: null,
+      atOrigin: true,
+      currentLocation: origin,
+    }))
+  );
+
+  const map = useRef(null);
+
+  const pathLayer = useRef(
+    new VectorLayer({
+      source: pathSource,
+      style: new Style({
+        stroke: new Stroke({
+          color: "red",
+          width: 2,
+        }),
       }),
     })
   );
-  feature.setProperties({ isClickable: true, coord });
-  return feature;
-});
-
-// Tạo layer cho các điểm ngẫu nhiên
-const randomPointLayer = new VectorLayer({
-  source: new VectorSource({
-    features: features,
-  }),
-});
-
-function MapComponent() {
-  const [showModal, setShowModal] = useState(false);
-  const [selectedFeature, setSelectedFeature] = useState(null);
-  const [showTravelerModal, setShowTravelerModal] = useState(false);
-  const [currentTraveler, setCurrentTraveler] = useState(null);
-
-  const destinationsInMovement = useRef([]);
-  const destinationsReached = useRef([]);
-  const [showPointModal, setShowPointModal] = useState(false);
-  const [currentMovingTravelers, setCurrentMovingTravelers] = useState([]);
-
-  // Thay vì khởi tạo một mảng rỗng, hãy khởi tạo nó với số lượng bạn muốn.
-  const isMoving = useRef(Array.from({ length: TRAVELER_AMOUNT }, () => false)); // track if each traveler is moving
-  const travelers = useRef(
-    Array.from({ length: TRAVELER_AMOUNT }, () => ({
-      feature: null,
-      destination: null,
-      atOrigin: true, // thêm trạng thái mới vào đây
-      currentLocation: origin, // khởi tạo vị trí hiện tại tại điểm origin
-    }))
-  );
-  const [selectedTraveler, setSelectedTraveler] = useState(null); // track which traveler is manually selected
-  const map = useRef(null);
-
-  // tao ra 1 tham chieu layer de ve duong di
-  // Khởi tạo currentPathLayer
-  let currentPathLayer = {
-    value: null,
-  };
 
   const mapRef = useRef();
 
+  const travelerSource = new VectorSource();
+
   useEffect(() => {
-    // Nếu Map chưa được khởi tạo, thì ta sẽ tạo mới.
+    originFeatureRef.current = new Feature({
+      geometry: new Point(fromLonLat(origin)),
+    });
+    originFeatureRef.current.setStyle(originPointStyle);
+
+    const originLayer = new VectorLayer({
+      source: new VectorSource({
+        features: [originFeatureRef.current],
+      }),
+    });
+
     if (!map.current) {
       map.current = new Map({
-        target: mapRef.current, // đổ map vào HTML element
+        target: mapRef.current,
         layers: [
-          // thiết lập các layer cho Map
           new TileLayer({
             source: new XYZ({
               url: `${mapStyle}/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`,
             }),
           }),
-          // new TileLayer({
-          //   source: new OSM(),
-          // }),
+          originLayer,
           randomPointLayer,
         ],
         view: new View({
           center: fromLonLat(origin),
-          zoom: 14,
-          minZoom: 14,
-          maxZoom: 16,
-          // extent,
+          zoom: 16,
+          minZoom: 16,
+          maxZoom: 18,
           constrainResolution: true,
           constrainRotation: true,
         }),
       });
-    }
 
-    // Tạo feature cho điểm xuất phát
-    const originFeature = new Feature({
-      geometry: new Point(fromLonLat(origin)),
-    });
-    originFeature.setStyle(startPointStyle);
+      map.current.getView().on("propertychange", function (e) {
+        switch (e.key) {
+          case "resolution":
+            let zoom = this.getZoom();
 
-    // Tạo layer cho điểm xuất phát
-    new VectorLayer({
-      map: map.current,
-      source: new VectorSource({
-        features: [originFeature],
-      }),
-    });
-
-    // Initialize the travelers
-    travelers.current.forEach((traveler, idx) => {
-      if (!traveler.feature) {
-        traveler.feature = new Feature({
-          geometry: new Point(fromLonLat(origin)),
-        });
-
-        // Create an HTML reference to attach the gif.
-        const gifRef = document.createElement("div");
-        gifRef.innerHTML = `<img src="${arrow}" style="width:50px;height:50px;">`;
-
-        const gifOverlay = new Overlay({
-          element: gifRef,
-          positioning: "center-center",
-          stopEvent: false,
-        });
-        map.current.addOverlay(gifOverlay);
-
-        traveler.overlay = gifOverlay;
-
-        // Create a new style for each traveler with a number
-        // const numberStyle = new Style({
-        //   text: new Text({
-        //     text: String(idx + 1),
-        //     scale: 1.2, // adjust scale as needed
-        //     offsetY: -25, // adjust offset as needed to position the number correctly
-        //   }),
-        //   image: new Icon({
-        //     src: quan_doi,
-        //     width: 46.7,
-        //     height: 31,
-        //   }),
-        // });
-
-        // traveler.feature.setStyle(numberStyle);
-        // Inside the travelers.current.forEach loop
-        traveler.feature.setProperties({
-          id: idx,
-          isTraveler: true,
-          moving: isMoving.current[idx],
-        });
-
-        // Create layer for each traveler
-        new VectorLayer({
-          map: map.current,
-          source: new VectorSource({
-            features: [traveler.feature],
-          }),
-        });
-      }
-    });
-
-    // map.current.on("click", function (evt) {
-    //   var hasFeature = map.current.hasFeatureAtPixel(evt.pixel);
-
-    //   if (!hasFeature && !isLoadingGeoData) {
-    //     var lonLat = toLonLat(evt.coordinate);
-
-    //     console.log("Object.keys(geoData).length", Object.keys(geoData).length);
-
-    //     if (Object.keys(geoData).length > 0) {
-    //       const result = isLand(lonLat[1], lonLat[0], geoData);
-    //       console.log("Is it land? :", result);
-    //     }
-    //   }
-    // });
-
-    map.current.on("click", (evt) => {
-      let hasFeature = false;
-      map.current.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
-        if (feature.get("isClickable")) {
-          const destination = feature.get("coord");
-          const destinationInMovement = destinationsInMovement.current.some(
-            (item) => item.coordinate === destination
-          );
-          const destinationReached = destinationsReached.current.some(
-            (item) => item.coordinate === destination
-          );
-
-          if (destinationInMovement || destinationReached) {
-            const movingTravelers = destinationsInMovement.current.filter(
-              (item) => item.coordinate === destination
-            );
-            const reachedTravelers = destinationsReached.current.filter(
-              (item) => item.coordinate === destination
-            );
-            setCurrentMovingTravelers([
-              ...movingTravelers,
-              ...reachedTravelers,
-            ]);
-            setShowPointModal(true);
-          } else if (!isMoving.current.every(Boolean)) {
-            setSelectedFeature(destination);
-            setShowModal(true);
-          }
-          hasFeature = true;
-        } else if (feature.get("isTraveler")) {
-          setCurrentTraveler(feature.get("id") + 1); // + 1 if your traveler ids start from 0
-
-          if (isMoving.current[feature.get("id")]) {
-            setShowTravelerModal(true);
-          }
-          hasFeature = true;
+            updateIconSize(zoom, originFeatureRef, randomFeatureRefs);
+            break;
         }
       });
 
-      if (!hasFeature) {
-        var lonLat = toLonLat(evt.coordinate);
-        axios
-          .get(
-            "https://overpass-api.de/api/interpreter?data=[out:json];is_in(" +
-              lonLat[1] +
-              "," +
-              lonLat[0] +
-              ")->.a;way(pivot.a);out;"
-          )
-          .then(function (response) {
-            if (response.data.elements.length > 0) {
-              var element = response.data.elements[0];
-              if (
-                element?.tags?.natural === "water" ||
-                element?.tags?.waterway ||
-                [
-                  "river",
-                  "riverbank",
-                  "canal",
-                  "stream",
-                  "pond",
-                  "reservoir",
-                  "lake",
-                  "sea",
-                ].includes(element?.tags?.waterway)
-              ) {
-                console.log("Điểm này là mặt nước.");
-              } else {
-                console.log("Điểm này không phải mặt nước.");
-              }
-            } else {
-              console.log("Không tìm thấy thông tin địa điểm tại điểm này.");
-            }
-          })
-          .catch(function (error) {
-            console.log(error);
+      map.current.addLayer(pathLayer.current);
+      addIconToRandomPointHasWork(
+        [0, 1, 2],
+        arrow_down,
+        randomPoints,
+        map,
+        pointOverlays
+      );
+    }
+
+    new VectorLayer({
+      map: map.current,
+      source: travelerSource,
+    });
+
+    travelersData.forEach((traveler, idx) => {
+      if (!travelers.current[idx]) {
+        travelers.current[idx] = {};
+      }
+
+      const gifElement = document.createElement("div");
+      gifElement.innerHTML = `<img id="traveler-overlay" src="${traveler_gif}" alt='traveler_gif' style="width:50px;height:50px;">`;
+
+      const travelerOverlay = new Overlay({
+        element: gifElement,
+        positioning: "center-center",
+        stopEvent: false,
+      });
+
+      const travelerFeature = new Feature({
+        geometry: new Point(fromLonLat(traveler.origin)),
+      });
+
+      travelerSource.addFeature(travelerFeature);
+
+      map.current.addOverlay(travelerOverlay);
+      travelerOverlay.setPosition(
+        travelerFeature.getGeometry().getCoordinates()
+      );
+
+      const dest = fromLonLat([
+        traveler.destination[0],
+        traveler.destination[1],
+      ]);
+      const destinationFeature = new Feature({
+        geometry: new Point(dest),
+      });
+
+      travelerSource.addFeature(destinationFeature);
+
+      travelersMarkers.current["traveler-" + idx] = {
+        travelerFeature,
+        destinationFeature,
+      };
+
+      travelers.current[idx].overlay = travelerOverlay;
+    });
+
+    const moveTraveler = async (traveler, idx) => {
+      const route = await getRoute(traveler.origin, traveler.destination);
+      if (!route) {
+        console.error("Could not fetch route");
+        return;
+      }
+
+      const travelerFeature =
+        travelersMarkers.current["traveler-" + idx].travelerFeature;
+      const routeLineString = turf.lineString(route);
+      const totalLength = turf.length(routeLineString, { units: "kilometers" });
+
+      let currentProgress = 0;
+
+      const animate = () => {
+        const currentTime = new Date().getTime();
+        if (currentProgress <= totalLength && currentTime <= traveler.endTime) {
+          const ratio =
+            (currentTime - traveler.startTime) /
+            (traveler.endTime - traveler.startTime);
+          currentProgress = totalLength * ratio;
+          const newCoord = turf.along(routeLineString, currentProgress, {
+            units: "kilometers",
           });
-      }
-    });
-  }, [isMoving, travelers]);
-  // }, [isMoving, isLoadingGeoData]); // Hàm này sẽ chạy lại mỗi khi giá trị của isMoving isLoadingGeoData thay đổi
+          const lngLatNew = newCoord.geometry.coordinates;
+          travelerFeature.getGeometry().setCoordinates(fromLonLat(lngLatNew));
 
-  const handleClose = () => {
-    if (selectedTraveler !== null) {
-      isMoving.current[selectedTraveler] = false;
-    }
-    setShowModal(false);
-  };
+          if (travelers.current[idx] && travelers.current[idx].overlay) {
+            travelers.current[idx].overlay.setPosition(fromLonLat(lngLatNew));
+          }
 
-  const handleConfirm = (selectedTraveler) => {
-    if (selectedTraveler === null) {
-      console.error("No traveler selected");
-      return;
-    }
+          requestAnimationFrame(animate);
+        }
+      };
 
-    if (isMoving.current[selectedTraveler]) {
-      console.log("This traveler is still moving!");
-      return;
-    }
+      requestAnimationFrame(animate);
+    };
 
-    const startTime = Date.now() / 1000;
-
-    // Đặt điểm đến cho traveler được chọn
-    travelers.current[selectedTraveler].destination = selectedFeature;
-
-    const newPosition = fromLonLat(selectedFeature);
-    const destinationFeature = new Feature({
-      geometry: new Point(newPosition),
+    travelersData.forEach((traveler, idx) => {
+      moveTraveler(traveler, idx);
     });
 
-    destinationFeature.setStyle(endPointStyle);
-    new VectorLayer({
-      map: map.current,
-      source: new VectorSource({
-        features: [destinationFeature],
-      }),
-    });
+    return () => {
+      if (map.current) {
+        map.current.setTarget(undefined);
 
-    // Mark the traveler as moving
-    isMoving.current[selectedTraveler] = true;
+        // Cleanup features when unmounting
+        Object.values(travelersMarkers.current).forEach((markerInfo) => {
+          travelerSource.removeFeature(markerInfo.travelerFeature);
+          travelerSource.removeFeature(markerInfo.destinationFeature);
+        });
 
-    // Trong hàm handleConfirm, bạn cần set thuộc tính moving của feature tương ứng thành true với travel đang di chuyển.
-    // Điều này giúp trạng thái moving được cập nhật đúng trên traveler mỗi khi họ di chuyển đến một điểm mới.
-    // Set the 'moving' property of the feature to true
-    travelers.current[selectedTraveler].feature.set("moving", true);
-
-    axios
-      .get("https://api.openrouteservice.org/v2/directions/driving-car", {
-        params: {
-          api_key,
-          start: origin.join(","),
-          end: selectedFeature.join(","),
-        },
-      })
-      .then((response) => {
-        if (!response.data.features[0]) {
-          console.error("Path is empty, cannot create lineString");
-          return;
+        // Clean up overlays
+        for (let index = 0; index < travelersData.length; index++) {
+          map.current.removeOverlay(travelers.current[index].overlay);
         }
 
-        travelers.current[selectedTraveler].atOrigin = false;
+        travelers.current = [];
+        map.current = null;
+      }
+    };
+  }, [travelersData, travelers]);
 
-        const path = response.data.features[0].geometry.coordinates;
+  useDrawRoute(
+    currentTime,
+    setCurrentTime,
+    travelersData,
+    routeFeatures,
+    pathSource,
+    getRoute
+  );
 
-        //Create currentPathLayer.value here after path is defined
-        currentPathLayer.value = new VectorLayer({
-          source: new VectorSource({
-            features: [
-              new Feature(
-                new LineString(path.map((coord) => fromLonLat(coord)))
-              ),
-            ],
-          }),
-        });
-        map.current.addLayer(currentPathLayer.value);
-
-        const line = turf.lineString(path);
-        const travelTime = 0.01 * 60 * 60;
-
-        const moveTraveler = () => {
-          const elapsedTime = Date.now() / 1000 - startTime;
-          const progress = elapsedTime / travelTime;
-          const distance = turf.length(line) * progress;
-          const currentLocation = turf.along(line, distance);
-
-          if (
-            !currentLocation ||
-            !currentLocation.geometry ||
-            !currentLocation.geometry.coordinates
-          ) {
-            console.error("Current location coordinates not available");
-            return;
-          }
-
-          // update vị trí hiện tại của traveler đang di chuyển
-          if (
-            currentLocation &&
-            currentLocation.geometry &&
-            currentLocation.geometry.coordinates
-          ) {
-            const currentCoord = currentLocation.geometry.coordinates;
-            travelers.current[selectedTraveler].currentLocation = currentCoord; // cập nhật vị trí hiện tại
-          }
-
-          if (
-            !currentLocation ||
-            !currentLocation.geometry ||
-            !currentLocation.geometry.coordinates
-          ) {
-            console.error("Current location coordinates not available");
-            return;
-          }
-
-          const currentCoord = currentLocation.geometry.coordinates;
-          travelers.current[selectedTraveler].feature.setGeometry(
-            new Point(fromLonLat(currentCoord))
-          );
-
-          // Update the position of the overlay
-          travelers.current[selectedTraveler].overlay.setPosition(
-            fromLonLat(currentCoord)
-          );
-
-          if (progress < 1) {
-            requestAnimationFrame(moveTraveler);
-          } else {
-            console.log("Đã đến đích!");
-            const destinationIndex = destinationsInMovement.current.findIndex(
-              (item) => item.id === selectedTraveler
-            );
-
-            if (destinationIndex > -1) {
-              destinationsReached.current.push(
-                destinationsInMovement.current[destinationIndex]
-              );
-              destinationsInMovement.current.splice(destinationIndex, 1);
-
-              // Update the moving property of the feature when the traveler has reached the destination:
-              travelers.current[selectedTraveler].feature.set("moving", false);
-            }
-
-            isMoving.current[selectedTraveler] = false;
-
-            // Xóa đường đi trên bản đồ
-            if (currentPathLayer.value) {
-              map.current.removeLayer(currentPathLayer.value);
-              currentPathLayer.value = null;
-            }
-
-            // sau 5s ve vi tri ban dau
-
-            setTimeout(function () {
-              if (!travelers.current[selectedTraveler]) {
-                console.error(
-                  "Traveler with id " + selectedTraveler + " does not exist"
-                );
-                return;
-              }
-
-              // immediately set traveler's location back to origin without visual transition;
-              travelers.current[selectedTraveler].currentLocation = origin; // Set current location to origin
-              // Update feature's geometry and overlay's position to origin
-              travelers.current[selectedTraveler].feature.setGeometry(
-                new Point(fromLonLat(origin))
-              );
-              travelers.current[selectedTraveler].overlay.setPosition(
-                fromLonLat(origin)
-              );
-
-              // remove the reached point from destinationsReached array
-              destinationsReached.current = destinationsReached.current.filter(
-                (reachedDestination) =>
-                  reachedDestination.id !== selectedTraveler ||
-                  !arePointsEqual(
-                    reachedDestination.coordinate,
-                    selectedFeature
-                  )
-              );
-              // where arePointsEqual is a helper function that checks if two points are equal
-              // where arePointsEqual is a helper function that checks if two points are equal
-              function arePointsEqual(point1, point2) {
-                if (point1 && point2) {
-                  return point1[0] === point2[0] && point1[1] === point2[1];
-                }
-                return false;
-              }
-            }, selectedTraveler * 2000); // delay based on the destination point index, multiplied by 1000 to convert to milliseconds
-
-            // THÊM ĐOẠN MÃ TẠI ĐÂY
-            // Tìm `destinationFeature` từ `randomPointLayer`
-            let featureAtDestination = null;
-            randomPointLayer.getSource().forEachFeature((feature) => {
-              const featureLoc = toLonLat(
-                feature.getGeometry().getCoordinates()
-              );
-              if (
-                featureLoc[0].toFixed(6) === selectedFeature[0].toFixed(6) &&
-                featureLoc[1].toFixed(6) === selectedFeature[1].toFixed(6)
-              ) {
-                featureAtDestination = feature;
-              }
-            });
-
-            // Cập nhật style cho `destinationFeature`
-            if (featureAtDestination) {
-              const currentStyle = featureAtDestination.getStyle();
-              currentStyle.setImage(
-                new Icon({
-                  src: arrow,
-                  width: 100,
-                  height: 100,
-                  anchor: [0.5, 3],
-                })
-              );
-
-              featureAtDestination.setStyle(currentStyle);
-            }
-          }
-        };
-
-        requestAnimationFrame(moveTraveler);
-      });
-
-    destinationsInMovement.current.push({
-      coordinate: selectedFeature,
-      id: selectedTraveler,
-    });
-
-    setShowModal(false);
-    setSelectedTraveler(null);
-  };
-
-  function TravelerStatus({ travelerId, status, currentLocation }) {
-    return (
-      <tr>
-        <td>{travelerId}</td>
-        <td>
-          {status.atOrigin
-            ? "At origin"
-            : status.movingTo
-            ? `Moving to point ${status.movingTo}`
-            : `Reached points: ${status.reached.join(", ")}`}
-        </td>
-        <td>{`Kinh độ: ${currentLocation[0].toFixed(
-          6
-        )}, Vĩ độ: ${currentLocation[1].toFixed(6)}`}</td>
-      </tr>
-    );
-  }
+  useClickMap(map, setShowPointModal);
 
   return (
     <div>
       <div ref={mapRef} style={{ width: "100%", height: "100vh" }} />
 
-      <div
-        style={{
-          zIndex: 999,
-          position: "absolute",
-          top: 0,
-          right: 0,
-          background: "#FFF",
-          padding: "10px",
-        }}
-      >
-        <img src={arrow} alt="arrow" width={200} />
-        <table>
-          <thead>
-            <tr>
-              <th>Traveler</th>
-              <th>Status</th>
-              <th>Current Position</th>
-            </tr>
-          </thead>
-          <tbody>
-            {travelers.current.map((traveler, index) => (
-              <TravelerStatus
-                travelerId={index + 1}
-                status={{
-                  atOrigin: traveler.atOrigin,
-                  movingTo: traveler.destination ? index : null,
-                  reached: destinationsReached.current
-                    .filter((item) => item.id === index)
-                    .map((item) => item.coordinate.join(", ")), // cần cải tiến phần này để hiển thị tên của điểm thay vì tọa độ
-                }}
-                currentLocation={traveler.currentLocation} // sử dụng vị trí hiện tại cho từng traveler
-              />
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* modal confirm di den diem */}
-      <Modal centered show={showModal} onHide={handleClose}>
-        <Modal.Header closeButton>
-          <Modal.Title>Confirmation</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>Select a traveler to go to this point</Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleClose}>
-            Cancel
-          </Button>
-          {travelers.current.map((traveler, i) => (
-            <Button
-              key={`traveler-${i}`}
-              variant="primary"
-              disabled={isMoving.current[i] || !travelers.current[i].atOrigin} // disable if the traveler is moving or not at origin
-              onClick={() => {
-                setSelectedTraveler(i);
-                handleConfirm(i);
-              }}
-            >
-              Traveler {i + 1}
-            </Button>
-          ))}
-        </Modal.Footer>
-      </Modal>
-
-      {/* modal show thong tin traveler*/}
-      {currentTraveler !== null && isMoving.current[currentTraveler - 1] && (
-        <Modal
-          centered
-          show={showTravelerModal}
-          onHide={() => setShowTravelerModal(false)}
-        >
-          <Modal.Header closeButton>
-            <Modal.Title>Traveler Information</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>This is Traveler {currentTraveler}</Modal.Body>
-          <Modal.Footer>
-            <Button
-              variant="primary"
-              onClick={() => setShowTravelerModal(false)}
-            >
-              OK
-            </Button>
-          </Modal.Footer>
-        </Modal>
-      )}
-
       {showPointModal && (
-        <Modal
-          centered
-          show={showPointModal}
-          onHide={() => setShowPointModal(false)}
+        <div
+          onClick={() => {
+            setShowPointModal(false);
+          }}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+          }}
         >
-          <Modal.Header closeButton>
-            <Modal.Title>Notification</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>
-            This point is already a destination for the following travellers:
-            {currentMovingTravelers.map((traveler, index) => (
-              <p key={index}>
-                Traveler {traveler.id + 1} is{" "}
-                {traveler.moving ? "moving to" : "at"} this point
-              </p>
-            ))}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button variant="primary" onClick={() => setShowPointModal(false)}>
-              OK
-            </Button>
-          </Modal.Footer>
-        </Modal>
+          <div
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+            style={{
+              backgroundColor: "white",
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              padding: "1em",
+              zIndex: 1000,
+            }}
+          >
+            <div onClick={() => setTravelersData([])}>Remove Data</div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,461 +1,119 @@
-/* eslint-disable default-case */
-/* eslint-disable react-hooks/exhaustive-deps */
-
-import * as turf from "@turf/turf";
-import Feature from "ol/Feature";
 import Map from "ol/Map";
-import Overlay from "ol/Overlay";
 import View from "ol/View";
-import Point from "ol/geom/Point";
 import TileLayer from "ol/layer/Tile";
-import VectorLayer from "ol/layer/Vector";
-import { fromLonLat } from "ol/proj";
-import VectorSource from "ol/source/Vector";
-import XYZ from "ol/source/XYZ";
-import Icon from "ol/style/Icon";
-import Style from "ol/style/Style";
-import Text from "ol/style/Text";
-import { useEffect, useRef, useState } from "react";
-import getRoute from "./route.js";
+import OSM from "ol/source/OSM";
+import React, { useEffect, useRef, useState } from "react";
+import Modal from "react-bootstrap/Modal";
+import { toLonLat } from "ol/proj";
+import { getDistance } from "ol/sphere";
 
-import arrow_down from "./images/arrow_down.png";
-import castle_lv1 from "./images/castle_lv1.png";
-import stone_quarry from "./images/stone_quarry.png";
-import traveler_gif from "./images/traveler.gif";
-
-import Stroke from "ol/style/Stroke";
-import useDrawRoute from "./useDrawRoute";
-import useClickMap from "./useClickMap.js";
-
-const TRAVELER_AMOUNT = 5;
-
-const api_key = "5b3ce3597851110001cf6248f2271b43c5d9489b88ff35df22f86d9f";
-const api_google_key = "AIzaSyAkssZqD3mMFIaE8fiYNKHqWH949B9gxlc";
-let origin = [105.8389327, 21.0040616];
-
-const mapboxToken =
-  "pk.eyJ1IjoiZHVvbmcyMzIxOTk4IiwiYSI6ImNscXowNzVhdDAwODgybnFtYWxhbDJzOHcifQ.HYN07AcSfEZVLeVQc6cz3g";
-
-const mapStyle =
-  "https://api.mapbox.com/styles/v1/duong2321998/clqz0c9ey00eo01pz2saa0id6";
-
-let originPointStyle = new Style({
-  image: new Icon({
-    src: castle_lv1,
-    width: 250,
-    height: 250,
-  }),
-});
-
-const randomPoints = [
-  [105.85557097876611, 21.010123023018156],
-  [105.8307598161608, 21.01949067718937],
-  [105.84495192198916, 20.993695564462747],
-  [105.8382869213779, 20.991998094765712],
-  [105.82524662678202, 20.999492560165645],
-  // [105.83717952677631, 21.00601960900288],
-  [105.85009415185186, 20.99624421452242],
-  [105.8245320385892, 21.01824879561772],
-  [105.86524792487954, 21.001461298558112],
-  [105.82207528585958, 21.004702319385373],
-];
-
-const travelersMockData = [
-  // {
-  //   id: 0,
-  //   origin: origin,
-  //   destination: randomPoints[0],
-  //   startTime: 1705049705 * 1000,
-  //   endTime: 1705052105 * 1000,
-  // },
-  {
-    id: 1,
-    origin: origin,
-    destination: randomPoints[2],
-    startTime: 1705308777 * 1000,
-    endTime: 1705314055 * 1000,
-  },
-  // {
-  //   id: 2,
-  //   origin: origin,
-  //   destination: randomPoints[3],
-  //   startTime: new Date().getTime(),
-  //   endTime: new Date().getTime() + 7000,
-  // },
-  // {
-  //   id: 3,
-  //   origin: origin,
-  //   destination: randomPoints[4],
-  //   startTime: new Date().getTime(),
-  //   endTime: new Date().getTime() + 8000,
-  // },
-  // {
-  //   id: 4,
-  //   origin: origin,
-  //   destination: randomPoints[5],
-  //   startTime: new Date().getTime(),
-  //   endTime: new Date().getTime() + 8000,
-  // },
-  // {
-  //   id: 5,
-  //   origin: origin,
-  //   destination: randomPoints[6],
-  //   startTime: new Date().getTime(),
-  //   endTime: new Date().getTime() + 10000,
-  // },
-];
-
-const pathSource = new VectorSource();
-
-function MapComponent() {
-  const [travelersData, setTravelersData] = useState(travelersMockData);
-  const [currentTime, setCurrentTime] = useState(new Date().getTime());
-  const [showPointModal, setShowPointModal] = useState(false);
-
-  const routeFeatures = useRef([]);
-  const originFeatureRef = useRef(null);
-  const randomFeatureRefs = useRef([]);
-  const travelersMarkers = useRef({});
-  const pointOverlays = useRef({}); // manage overlay of all points in map
-
-  function createOverlay(lon, lat, imageUrl) {
-    const iconElement = document.createElement("div");
-    iconElement.classList.add("icon-overlay"); // Add CSS class to the div
-    iconElement.innerHTML = `<img src="${imageUrl}" style="width: 40px; height: 40px" />`;
-
-    const iconOverlay = new Overlay({
-      element: iconElement,
-      position: fromLonLat([lon, lat]),
-      positioning: "center-center", // Change this line
-    });
-
-    map.current.addOverlay(iconOverlay);
-
-    pointOverlays.current[`${lon}_${lat}`] = iconOverlay;
-  }
-
-  // insert icon
-  function addIconToRandomPointHasWork(indexRandomPoints, imageUrl) {
-    for (let key in pointOverlays.current) {
-      const overlay = pointOverlays.current[key];
-      map.current.removeOverlay(overlay);
-    }
-    pointOverlays.current = {};
-
-    for (let index of indexRandomPoints) {
-      const coord = randomPoints[index];
-      createOverlay(coord[0], coord[1], imageUrl);
-    }
-  }
-
-  const featuresRandomPoints = randomPoints.map((coord, index) => {
-    const feature = new Feature(new Point(fromLonLat(coord)));
-    feature.setStyle(
-      new Style({
-        image: new Icon({
-          src: stone_quarry,
-          width: 200,
-          height: 200,
-        }),
-        text: new Text({
-          text: String(index + 1),
-          scale: 1.2,
-          offsetY: -25,
-        }),
-      })
-    );
-    feature.setProperties({ isClickable: true, coord });
-
-    randomFeatureRefs.current.push(feature);
-
-    return feature;
-  });
-
-  const randomPointLayer = new VectorLayer({
-    source: new VectorSource({
-      features: featuresRandomPoints,
-    }),
-  });
-
-  function updateIconSize(zoom) {
-    // origin
-    let newIconSizeOrigin;
-
-    const iconOverLay = document.getElementsByClassName("icon-overlay");
-
-    if (zoom > 15) {
-      newIconSizeOrigin = { width: 750, height: 750 };
-
-      for (let i = 0; i < iconOverLay.length; i++) {
-        iconOverLay[i].style.marginBottom = "450px";
-      }
-    } else {
-      newIconSizeOrigin = { width: 250, height: 250 };
-
-      for (let i = 0; i < iconOverLay.length; i++) {
-        iconOverLay[i].style.marginBottom = "150px";
-      }
-    }
-
-    const newStyle = new Style({
-      image: new Icon({
-        src: castle_lv1,
-        ...newIconSizeOrigin,
-      }),
-    });
-    originFeatureRef.current.setStyle(newStyle);
-
-    // random points
-    const newIconSizeRandomPoints =
-      zoom <= 15 ? { width: 200, height: 200 } : { width: 600, height: 600 };
-
-    const newStyleRandom = new Style({
-      image: new Icon({
-        src: stone_quarry,
-        ...newIconSizeRandomPoints,
-      }),
-    });
-    randomFeatureRefs.current.forEach((feature) =>
-      feature.setStyle(newStyleRandom)
-    );
-  }
-
-  const isMoving = useRef(Array.from({ length: TRAVELER_AMOUNT }, () => true));
-  const travelers = useRef(
-    Array.from({ length: TRAVELER_AMOUNT }, () => ({
-      feature: null,
-      destination: null,
-      atOrigin: true,
-      currentLocation: origin,
-    }))
-  );
-
-  const map = useRef(null);
-
-  const pathLayer = useRef(
-    new VectorLayer({
-      source: pathSource,
-      style: new Style({
-        stroke: new Stroke({
-          color: "red",
-          width: 2,
-        }),
-      }),
-    })
-  );
-
+const OpenLayerMap = () => {
   const mapRef = useRef();
+  const map = useRef();
+  const isZoomed = useRef(false);
+  const [showBackButton, setShowBackButton] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [clickedCoordinate, setClickedCoordinate] = useState([0, 0]);
+  const [currentZoom, setCurrentZoom] = useState(2);
 
-  const travelerSource = new VectorSource();
+  const backToInitialView = () => {
+    if (map.current) {
+      map.current.getView().setCenter([0, 0]);
+      map.current.getView().setZoom(2);
+      isZoomed.current = false;
+      setShowBackButton(false);
+    }
+  };
 
   useEffect(() => {
-    originFeatureRef.current = new Feature({
-      geometry: new Point(fromLonLat(origin)),
-    });
-    originFeatureRef.current.setStyle(originPointStyle);
-
-    const originLayer = new VectorLayer({
-      source: new VectorSource({
-        features: [originFeatureRef.current],
+    map.current = new Map({
+      target: mapRef.current,
+      layers: [
+        new TileLayer({
+          source: new OSM(),
+        }),
+      ],
+      view: new View({
+        center: [0, 0],
+        zoom: currentZoom,
       }),
     });
 
-    if (!map.current) {
-      map.current = new Map({
-        target: mapRef.current,
-        layers: [
-          new TileLayer({
-            source: new XYZ({
-              url: `${mapStyle}/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`,
-            }),
-          }),
-          originLayer,
-          randomPointLayer,
-        ],
-        view: new View({
-          center: fromLonLat(origin),
-          zoom: 14,
-          minZoom: 14,
-          maxZoom: 16,
-          constrainResolution: true,
-          constrainRotation: true,
-        }),
-      });
-
-      map.current.getView().on("propertychange", function (e) {
-        switch (e.key) {
-          case "resolution":
-            let zoom = this.getZoom();
-
-            updateIconSize(zoom);
-            break;
-        }
-      });
-
-      map.current.addLayer(pathLayer.current);
-      addIconToRandomPointHasWork([0, 1, 2], arrow_down);
-    }
-
-    new VectorLayer({
-      map: map.current,
-      source: travelerSource,
+    map.current.on("click", function (evt) {
+      const clickedPoint = evt.coordinate;
+      if (!isZoomed.current) {
+        map.current.getView().animate({
+          center: clickedPoint,
+          zoom: 16,
+          minZoom: 16,
+          maxZoom: 18,
+          duration: 1000,
+        });
+        isZoomed.current = true;
+        setShowBackButton(true);
+      } else {
+        setClickedCoordinate(toLonLat(clickedPoint));
+        setShowModal(true);
+        isZoomed.current = false;
+      }
     });
 
-    travelersData.forEach((traveler, idx) => {
-      if (!travelers.current[idx]) {
-        travelers.current[idx] = {};
-      }
-
-      const gifElement = document.createElement("div");
-      gifElement.innerHTML = `<img id="traveler-overlay" src="${traveler_gif}" alt='traveler_gif' style="width:50px;height:50px;">`;
-
-      const travelerOverlay = new Overlay({
-        element: gifElement,
-        positioning: "center-center",
-        stopEvent: false,
-      });
-
-      const travelerFeature = new Feature({
-        geometry: new Point(fromLonLat(traveler.origin)),
-      });
-
-      travelerSource.addFeature(travelerFeature);
-
-      map.current.addOverlay(travelerOverlay);
-      travelerOverlay.setPosition(
-        travelerFeature.getGeometry().getCoordinates()
-      );
-
-      const dest = fromLonLat([
-        traveler.destination[0],
-        traveler.destination[1],
-      ]);
-      const destinationFeature = new Feature({
-        geometry: new Point(dest),
-      });
-
-      travelerSource.addFeature(destinationFeature);
-
-      travelersMarkers.current["traveler-" + idx] = {
-        travelerFeature,
-        destinationFeature,
-      };
-
-      travelers.current[idx].overlay = travelerOverlay;
+    map.current.getView().on("change:resolution", function (evt) {
+      setCurrentZoom(map.current.getView().getZoom());
     });
 
-    const moveTraveler = async (traveler, idx) => {
-      const route = await getRoute(traveler.origin, traveler.destination);
-      if (!route) {
-        console.error("Could not fetch route");
-        return;
+    // Listen to changes in the center by responding to 'change:center' event
+    map.current.getView().on("change:center", () => {
+      if (map.current.getView().getZoom() >= 16) {
+        const extent = map.current
+          .getView()
+          .calculateExtent(map.current.getSize());
+
+        const topRightCoordinate = toLonLat([extent[2], extent[3]]);
+        const bottomLeftCoordinate = toLonLat([extent[0], extent[1]]);
+
+        console.log("Top right coordinate: ", topRightCoordinate);
+        console.log("Bottom left coordinate: ", bottomLeftCoordinate);
       }
-
-      const travelerFeature =
-        travelersMarkers.current["traveler-" + idx].travelerFeature;
-      const routeLineString = turf.lineString(route);
-      const totalLength = turf.length(routeLineString, { units: "kilometers" });
-
-      let currentProgress = 0;
-
-      const animate = () => {
-        const currentTime = new Date().getTime();
-        if (currentProgress <= totalLength && currentTime <= traveler.endTime) {
-          const ratio =
-            (currentTime - traveler.startTime) /
-            (traveler.endTime - traveler.startTime);
-          currentProgress = totalLength * ratio;
-          const newCoord = turf.along(routeLineString, currentProgress, {
-            units: "kilometers",
-          });
-          const lngLatNew = newCoord.geometry.coordinates;
-          travelerFeature.getGeometry().setCoordinates(fromLonLat(lngLatNew));
-
-          if (travelers.current[idx] && travelers.current[idx].overlay) {
-            travelers.current[idx].overlay.setPosition(fromLonLat(lngLatNew));
-          }
-
-          requestAnimationFrame(animate);
-        }
-      };
-
-      requestAnimationFrame(animate);
-    };
-
-    travelersData.forEach((traveler, idx) => {
-      moveTraveler(traveler, idx);
     });
 
     return () => {
-      if (map.current) {
-        map.current.setTarget(undefined);
-
-        // Cleanup features when unmounting
-        Object.values(travelersMarkers.current).forEach((markerInfo) => {
-          travelerSource.removeFeature(markerInfo.travelerFeature);
-          travelerSource.removeFeature(markerInfo.destinationFeature);
-        });
-
-        // Clean up overlays
-        for (let index = 0; index < travelersData.length; index++) {
-          map.current.removeOverlay(travelers.current[index].overlay);
-        }
-
-        travelers.current = [];
-        map.current = null;
-      }
+      if (map.current) map.current.setTarget(undefined);
     };
-  }, [isMoving, travelersData, travelers]);
-
-  useDrawRoute(
-    currentTime,
-    setCurrentTime,
-    travelersData,
-    routeFeatures,
-    pathSource,
-    getRoute
-  );
-
-  useClickMap(map, setShowPointModal);
+  }, []);
 
   return (
     <div>
-      <div ref={mapRef} style={{ width: "100%", height: "100vh" }} />
-
-      {showPointModal && (
-        <div
-          onClick={() => {
-            setShowPointModal(false);
-          }}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-          }}
+      <div ref={mapRef} style={{ width: "100%", height: "100vh" }}></div>
+      {showBackButton && (
+        <button
+          style={{ position: "absolute", top: "10px", left: "10px" }}
+          onClick={backToInitialView}
         >
-          <div
-            onClick={(event) => {
-              event.stopPropagation();
-            }}
-            style={{
-              backgroundColor: "white",
-              position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
-              padding: "1em",
-              zIndex: 1000,
-            }}
-          >
-            <div onClick={() => setTravelersData([])}>Remove Data</div>
-          </div>
-        </div>
+          Back
+        </button>
       )}
+
+      <Modal
+        show={showModal}
+        onHide={() => {
+          setShowModal(false);
+          isZoomed.current = false;
+        }}
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Coordinate</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Longitude: {clickedCoordinate[0]}
+          <br />
+          Latitude: {clickedCoordinate[1]}
+          <br />
+          Current Zoom: {currentZoom}
+        </Modal.Body>
+      </Modal>
     </div>
   );
-}
+};
 
-export default MapComponent;
+export default OpenLayerMap;
